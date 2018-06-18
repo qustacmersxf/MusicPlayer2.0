@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:title="检索本地MP3"
+        android:id="@+id/item_menu_mainactivity_searchMP3"></item>
+    <item android:title="选择文件夹"
+        android:id="@+id/item_menu_mainactivity_selectDir"></item>
+
+</menu>
