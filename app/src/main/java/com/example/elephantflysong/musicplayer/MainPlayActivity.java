@@ -272,6 +272,23 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                 return false;
             }
         });
+
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                binder.seekTo(seekBar.getProgress());
+            }
+        });
     }
 
     @Override

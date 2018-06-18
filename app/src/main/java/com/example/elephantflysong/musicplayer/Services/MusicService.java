@@ -36,6 +36,12 @@ public class MusicService extends Service {
         public void startMusic(int index){
             if (player == null){
                 player = new MediaPlayer();
+                player.setOnSeekCompleteListener(new MediaPlayer.OnSeekCompleteListener() {
+                    @Override
+                    public void onSeekComplete(MediaPlayer mp) {
+                        player.start();
+                    }
+                });
             }
             try{
                 player.reset();
@@ -107,6 +113,10 @@ public class MusicService extends Service {
             }finally {
                 return position;
             }
+        }
+
+        public void seekTo(int progress){
+            player.seekTo(progress);
         }
 
         public void setFiles(ArrayList<Music> files_){
