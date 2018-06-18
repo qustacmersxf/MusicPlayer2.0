@@ -116,5 +116,9 @@ public class MusicService extends Service {
         public void setMusicListener(MusicListener listener_){
             listener = listener_;
         }
+
+        public int getCurrentProgress(){
+            return player.getCurrentPosition();
+        }
     }
 }

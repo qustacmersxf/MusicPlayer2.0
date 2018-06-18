@@ -1,7 +1,5 @@
 package com.example.elephantflysong.musicplayer.Music;
 
-import java.io.File;
-
 /**
  * Created by ElephantFlySong on 2018/6/13.
  */

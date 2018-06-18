@@ -81,6 +81,10 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     binder.setFiles(files);
                     binder.setMusicListener(musicListener);
                     return true;
+                case 2:
+                    int currentTime = binder.getCurrentProgress();
+                    seekBar.setProgress(currentTime);
+                    text_currentTime.setText(toTime(currentTime));
                 default:
                     break;
             }
@@ -88,41 +92,80 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         }
     });
 
+    private MyThread seekBarThread;
+
+    public class MyThread extends Thread{
+
+        private boolean exec = true;
+
+        @Override
+        public void run() {
+            while (exec){
+                Message msg = new Message();
+                msg.what = 2;
+                handler.sendMessage(msg);
+                try{
+                    Thread.sleep(1000);
+                }catch (InterruptedException e){
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        public void quit(){
+            exec = false;
+        }
+    }
+
     private MusicAdapter.OnItemClickListener onItemClickListener = new MusicAdapter.OnItemClickListener() {
         @Override
         public void onItemClick(int position) {
             MainPlayActivity.position = position;
             binder.startMusic(position);
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
-            text_currentMusic.setText(files.get(position).getName());
+
             status = MUSIC_START;
         }
     };
-
     private MusicListener musicListener = new MusicListener() {
         @Override
         public void onStart(int position) {
-
+            text_currentMusic.setText(files.get(position).getName());
+            text_endTime.setText(toTime(files.get(position).getLength()));
+            seekBar.setMax(files.get(position).getLength());
+            seekBarThread = new MyThread();
+            seekBarThread.start();
         }
 
         @Override
         public void onPause() {
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
+            seekBarThread.quit();/*内存泄漏？*/
+            seekBarThread = null;
         }
 
         @Override
         public void onStop() {
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
+            seekBarThread.quit();
+            seekBarThread = null;
+
+            text_currentTime.setText(toTime(files.get(position).getLength()));
+            seekBar.setProgress(files.get(position).getLength());
         }
 
         @Override
         public void onNext(int position) {
             text_currentMusic.setText(files.get(position).getName());
+            text_endTime.setText(toTime(files.get(position).getLength()));
+            seekBar.setMax(files.get(position).getLength());
         }
 
         @Override
         public void onPrevious(int position) {
             text_currentMusic.setText(files.get(position).getName());
+            text_endTime.setText(toTime(files.get(position).getLength()));
+            seekBar.setMax(files.get(position).getLength());
         }
     };
 
@@ -329,6 +372,16 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             }
         }
         return;
+    }
+
+    private String toTime(int length){
+        int seconds = length / 1000;
+        int minutes = seconds / 60;
+        seconds %= 60;
+        if (seconds < 10){
+            return "" + minutes + ":0" + seconds;
+        }
+        return "" + minutes + ":" + seconds;
     }
 
 }
