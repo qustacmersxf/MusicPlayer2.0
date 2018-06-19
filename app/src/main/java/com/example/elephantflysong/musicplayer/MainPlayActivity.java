@@ -41,6 +41,7 @@ import com.example.elephantflysong.musicplayer.Music.Music;
 import com.example.elephantflysong.musicplayer.Services.MusicService;
 
 import java.io.File;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
@@ -89,7 +90,6 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     adapter.setOnItemClickListener(onItemClickListener);
                     rv_musics.setAdapter(adapter);
                     position = 0;
-                    binder.setMusicListener(musicListener);
                     return true;
                 case 2:
                     int currentTime = binder.getCurrentProgress();
@@ -131,6 +131,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         @Override
         public void onItemClick(int position) {
             MainPlayActivity.position = position;
+            binder.setMusicListener(musicListener);//冗余操作
             binder.startMusic(files.get(position));
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
             status = MUSIC_START;
@@ -228,7 +229,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         }
 
         Intent intent = new Intent(MainPlayActivity.this, MusicService.class);
-        bindService(intent, connection, BIND_AUTO_CREATE);  //未解绑
+        bindService(intent, connection, BIND_AUTO_CREATE);
 
         initMainView();
     }
@@ -356,6 +357,9 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             browserFile(Environment.getExternalStorageDirectory());
         }else {
             files = dbHelper.getMusics(db);
+            Message msg = new Message();
+            msg.what = 1;
+            handler.sendMessage(msg);
         }
     }
 
@@ -383,6 +387,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
 
     private void startMusic(){
         if (binder != null){
+            binder.setMusicListener(musicListener);//冗余操作
             if (status != MUSIC_START){
                 if (position == -1){
                     position = 0;

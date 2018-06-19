@@ -8,6 +8,7 @@ import android.os.IBinder;
 import android.util.Log;
 
 import com.example.elephantflysong.musicplayer.Interfaces.MusicListener;
+import com.example.elephantflysong.musicplayer.MainPlayActivity;
 import com.example.elephantflysong.musicplayer.Music.Music;
 
 import java.io.IOException;
