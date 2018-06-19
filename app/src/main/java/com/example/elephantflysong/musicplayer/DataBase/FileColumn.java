@@ -5,10 +5,10 @@ package com.example.elephantflysong.musicplayer.DataBase;
  */
 
 public class FileColumn {
-    public static String TABLE = "File_Table";
-    public static String ID = "_Id";
-    public static String NAME = "fileName";
-    public static String PATH = "filePath";
-    public static String TYPE = "type";
-    public static String SORT = "sort";
+    public static String TABLE = "Table_music";
+    public static String ID = "id";
+    public static String NAME = "name";
+    public static String PATH = "path";
+    public static String LENGTH = "length";
+    public static String ARTIST = "artist";
 }

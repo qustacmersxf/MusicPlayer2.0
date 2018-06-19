@@ -5,6 +5,7 @@ package com.example.elephantflysong.musicplayer.Music;
  */
 
 public class Music {
+    private int id;
     private String name;
     private String path;
     private int length;
@@ -13,11 +14,20 @@ public class Music {
     public Music() {
     }
 
-    public Music(String name, String path, int length, String artist) {
+    public Music(int id, String name, String path, int length, String artist) {
+        this.id = id;
         this.name = name;
         this.path = path;
         this.length = length;
         this.artist = artist;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
     }
 
     public String getName() {

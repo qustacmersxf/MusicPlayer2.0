@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.media.MediaPlayer;
 import android.os.Binder;
 import android.os.IBinder;
+import android.util.Log;
 
 import com.example.elephantflysong.musicplayer.Interfaces.MusicListener;
 import com.example.elephantflysong.musicplayer.Music.Music;
@@ -13,12 +14,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 public class MusicService extends Service {
-
-    private MusicBinder binder;
-    private ArrayList<Music> files;
     private MediaPlayer player;
-
-    private int position = -1;
 
     private MusicListener listener;
 
@@ -28,12 +24,12 @@ public class MusicService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         // TODO: Return the communication channel to the service.
-        binder = new MusicBinder();
-        return binder;
+        return new MusicBinder();
     }
 
     public class MusicBinder extends Binder{
-        public void startMusic(int index){
+
+        public void startMusic(Music music){
             if (player == null){
                 player = new MediaPlayer();
                 player.setOnSeekCompleteListener(new MediaPlayer.OnSeekCompleteListener() {
@@ -45,30 +41,24 @@ public class MusicService extends Service {
             }
             try{
                 player.reset();
-                player.setDataSource(files.get(index).getPath());
+                player.setDataSource(music.getPath());
                 player.prepare();
                 player.start();
                 player.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
                     @Override
                     public void onCompletion(MediaPlayer mp){
-                        nextMusic();
+                        listener.onEndMusic();
                     }
                 });
-                position = index;
-                listener.onStart(position);
+                listener.onStart(music);
             }catch (IOException e){
                 e.printStackTrace();
             }
         }
 
-        public void startMusic(){
-            if (position == -1) {
-                position = 0;
-                this.startMusic(position);
-            }else{
-                player.start();
-                listener.onStart(position);
-            }
+        public void continueMusic(){
+            player.start();
+            listener.onContinue();
         }
 
         public void pauseMusic(){
@@ -81,46 +71,8 @@ public class MusicService extends Service {
             listener.onStop();
         }
 
-        public int nextMusic(){
-            player.stop();
-            try{
-                position = (position + 1) % files.size();
-                Music file = files.get(position);
-                player.reset();
-                player.setDataSource(file.getPath());
-                player.prepare();
-                player.start();
-                listener.onNext(position);
-            }catch (IOException e){
-                e.printStackTrace();
-            }finally {
-                return position;
-            }
-        }
-
-        public int previousMusic(){
-            player.stop();
-            try{
-                position = (position + files.size() - 1) % files.size();
-                Music file = files.get(position);
-                player.reset();
-                player.setDataSource(file.getPath());
-                player.prepare();
-                player.start();
-                listener.onPrevious(position);
-            }catch (IOException e){
-                e.printStackTrace();
-            }finally {
-                return position;
-            }
-        }
-
         public void seekTo(int progress){
             player.seekTo(progress);
-        }
-
-        public void setFiles(ArrayList<Music> files_){
-            files = files_;
         }
 
         public void setMusicListener(MusicListener listener_){

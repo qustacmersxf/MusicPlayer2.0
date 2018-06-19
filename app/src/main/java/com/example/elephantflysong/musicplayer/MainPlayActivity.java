@@ -4,13 +4,17 @@ import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -18,6 +22,7 @@ import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -29,12 +34,17 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.elephantflysong.musicplayer.Adapters.MusicAdapter;
+import com.example.elephantflysong.musicplayer.DataBase.DBHelper;
+import com.example.elephantflysong.musicplayer.DataBase.FileColumn;
 import com.example.elephantflysong.musicplayer.Interfaces.MusicListener;
 import com.example.elephantflysong.musicplayer.Music.Music;
 import com.example.elephantflysong.musicplayer.Services.MusicService;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Queue;
+import java.util.jar.Manifest;
 
 public class MainPlayActivity extends AppCompatActivity implements View.OnClickListener{
 
@@ -44,6 +54,8 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
     public static final int MUSIC_START = 1;
     public static final int MUSIC_PAUSE = 2;
 
+    private DBHelper dbHelper;
+    private SQLiteDatabase db;
     private Cursor cursor;
 
     private ImageButton bt_list;
@@ -52,7 +64,6 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
     private ImageButton bt_play;
     private ImageButton bt_moveUp;
     private ImageButton bt_moveDown;
-    private TextView text_irc;
     private TextView text_endTime;
     private TextView text_currentTime;
     private TextView text_currentMusic;
@@ -78,7 +89,6 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     adapter.setOnItemClickListener(onItemClickListener);
                     rv_musics.setAdapter(adapter);
                     position = 0;
-                    binder.setFiles(files);
                     binder.setMusicListener(musicListener);
                     return true;
                 case 2:
@@ -121,18 +131,17 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         @Override
         public void onItemClick(int position) {
             MainPlayActivity.position = position;
-            binder.startMusic(position);
+            binder.startMusic(files.get(position));
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
-
             status = MUSIC_START;
         }
     };
     private MusicListener musicListener = new MusicListener() {
         @Override
-        public void onStart(int position) {
-            text_currentMusic.setText(files.get(position).getName());
-            text_endTime.setText(toTime(files.get(position).getLength()));
-            seekBar.setMax(files.get(position).getLength());
+        public void onStart(Music music) {
+            text_currentMusic.setText(music.getName());
+            text_endTime.setText(toTime(music.getLength()));
+            seekBar.setMax(music.getLength());
             seekBarThread = new MyThread();
             seekBarThread.start();
         }
@@ -140,32 +149,50 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         @Override
         public void onPause() {
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
-            seekBarThread.quit();/*内存泄漏？*/
-            seekBarThread = null;
+            if (seekBarThread != null){
+                seekBarThread.quit();
+                seekBarThread = null;
+            }
         }
 
         @Override
         public void onStop() {
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
-            seekBarThread.quit();
-            seekBarThread = null;
+            if (seekBarThread != null){
+                seekBarThread.quit();
+                seekBarThread = null;
+            }
 
             text_currentTime.setText(toTime(files.get(position).getLength()));
             seekBar.setProgress(files.get(position).getLength());
         }
 
         @Override
-        public void onNext(int position) {
-            text_currentMusic.setText(files.get(position).getName());
-            text_endTime.setText(toTime(files.get(position).getLength()));
-            seekBar.setMax(files.get(position).getLength());
+        public void onNext(Music music) {
+            bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
+            text_currentMusic.setText(music.getName());
+            text_endTime.setText(toTime(music.getLength()));
+            seekBar.setMax(music.getLength());
         }
 
         @Override
-        public void onPrevious(int position) {
-            text_currentMusic.setText(files.get(position).getName());
-            text_endTime.setText(toTime(files.get(position).getLength()));
-            seekBar.setMax(files.get(position).getLength());
+        public void onPrevious(Music music) {
+            bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
+            text_currentMusic.setText(music.getName());
+            text_endTime.setText(toTime(music.getLength()));
+            seekBar.setMax(music.getLength());
+        }
+
+        @Override
+        public void onEndMusic(){
+            nextMusic();
+        }
+
+        @Override
+        public void onContinue(){
+            seekBarThread = new MyThread();
+            seekBarThread.start();
+            bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
         }
     };
 
@@ -186,11 +213,34 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
 
-        initMainView();
+        List<String> permissions = new ArrayList<>();
+        if (ContextCompat.checkSelfPermission(MainPlayActivity.this,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
+            permissions.add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+        if (ContextCompat.checkSelfPermission(MainPlayActivity.this,
+                android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
+            permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE);
+        }
+        if (!permissions.isEmpty()){
+            String[] _perssions = permissions.toArray(new String[permissions.size()]);
+            ActivityCompat.requestPermissions(MainPlayActivity.this, _perssions, 1);
+        }
 
         Intent intent = new Intent(MainPlayActivity.this, MusicService.class);
-        startService(intent);
         bindService(intent, connection, BIND_AUTO_CREATE);  //未解绑
+
+        initMainView();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
     }
 
     @Override
@@ -231,6 +281,15 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     break;
             }
         }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK){
+            moveTaskToBack(true);
+            return  false;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     @Override
@@ -289,6 +348,15 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                 binder.seekTo(seekBar.getProgress());
             }
         });
+
+        dbHelper = new DBHelper(MainPlayActivity.this);
+        db = dbHelper.getWritableDatabase();
+        cursor = db.rawQuery("select * from " + FileColumn.TABLE, null);
+        if (cursor.getCount() == 0){
+            browserFile(Environment.getExternalStorageDirectory());
+        }else {
+            files = dbHelper.getMusics(db);
+        }
     }
 
     @Override
@@ -297,37 +365,65 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             case R.id.ibtn_listplay:
                 break;
             case R.id.ibtn_start:
-                if (binder != null){
-                    if (status != MUSIC_START){
-                        binder.startMusic();
-                        bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
-                        text_currentMusic.setText(files.get(position).getName());
-                        status = MUSIC_START;
-                    }else{
-                        binder.pauseMusic();
-                        bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
-                        status = MUSIC_PAUSE;
-                    }
-                }
+                startMusic();
                 break;
             case R.id.ibtn_stop:
-                if (binder != null){
-                    binder.stopMusic();
-                    status = MUSIC_STOP;
-                }
+                stopMusic();
                 break;
             case R.id.ibtn_next:
-                if (binder != null){
-                    position = binder.nextMusic();
-                }
+                nextMusic();
                 break;
             case R.id.ibtn_before:
-                if (binder != null){
-                    position = binder.previousMusic();
-                }
+                previousMusic();
                 break;
             default:
                 break;
+        }
+    }
+
+    private void startMusic(){
+        if (binder != null){
+            if (status != MUSIC_START){
+                if (position == -1){
+                    position = 0;
+                    binder.startMusic(files.get(position));
+                }else{
+                    binder.continueMusic();
+                }
+                status = MUSIC_START;
+            }else{
+                binder.pauseMusic();
+                bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
+                status = MUSIC_PAUSE;
+            }
+        }
+    }
+
+    private void stopMusic(){
+        if (binder != null){
+            binder.stopMusic();
+            status = MUSIC_STOP;
+        }
+    }
+
+    private void previousMusic(){
+        if (binder != null){
+            //position = binder.previousMusic();
+            position = (position + files.size() - 1) % files.size();
+            binder.stopMusic();
+            binder.startMusic(files.get(position));
+            musicListener.onPrevious(files.get(position));
+            status = MUSIC_START;
+        }
+    }
+
+    private void nextMusic(){
+        if (binder != null){
+            position = (position + 1) % files.size();
+            binder.stopMusic();
+            binder.startMusic(files.get(position));
+            musicListener.onNext(files.get(position));
+            status = MUSIC_START;
         }
     }
 
@@ -343,8 +439,9 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         new Thread(new Runnable() {
             @Override
             public void run() {
-                files = new ArrayList<Music>();
+                files = new ArrayList<>();
                 searchMP3(file);
+                //dbHelper.addAllToDataBase(db, files);
                 if (files.size() > 0){
                     adapter = new MusicAdapter(files);
                     Message msg = new Message();
@@ -352,7 +449,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     handler.sendMessage(msg);
                 }else{
                     //有隐患
-                    Toast.makeText(MainPlayActivity.this, "未找到MP3文件", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getApplicationContext(), "未找到MP3文件", Toast.LENGTH_SHORT).show();
                 }
                 dialog.dismiss();
             }
