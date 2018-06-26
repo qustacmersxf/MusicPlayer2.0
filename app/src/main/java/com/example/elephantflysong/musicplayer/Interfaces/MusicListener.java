@@ -8,11 +8,11 @@ import com.example.elephantflysong.musicplayer.Music.Music;
 
 public interface MusicListener {
 
-    void onStart(Music music);
+    void onStart(Music music) throws InterruptedException;
 
-    void onPause();
+    void onPause() throws InterruptedException;
 
-    void onStop();
+    void onStop() throws InterruptedException;
 
     void onNext(Music music);
 

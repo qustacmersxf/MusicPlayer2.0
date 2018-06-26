@@ -25,21 +25,19 @@ public class MusicService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         // TODO: Return the communication channel to the service.
+        player = new MediaPlayer();
+        player.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer mp) {
+                player.start();
+            }
+        });
         return new MusicBinder();
     }
 
     public class MusicBinder extends Binder{
 
         public void startMusic(Music music){
-            if (player == null){
-                player = new MediaPlayer();
-                player.setOnSeekCompleteListener(new MediaPlayer.OnSeekCompleteListener() {
-                    @Override
-                    public void onSeekComplete(MediaPlayer mp) {
-                        player.start();
-                    }
-                });
-            }
             try{
                 player.reset();
                 player.setDataSource(music.getPath());
@@ -51,7 +49,11 @@ public class MusicService extends Service {
                         listener.onEndMusic();
                     }
                 });
-                listener.onStart(music);
+                try {
+                    listener.onStart(music);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }catch (IOException e){
                 e.printStackTrace();
             }
@@ -64,12 +66,20 @@ public class MusicService extends Service {
 
         public void pauseMusic(){
             player.pause();
-            listener.onPause();
+            try {
+                listener.onPause();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
         public void stopMusic(){
             player.stop();
-            listener.onStop();
+            try {
+                listener.onStop();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
         public void seekTo(int progress){

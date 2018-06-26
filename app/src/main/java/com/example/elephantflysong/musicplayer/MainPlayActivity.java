@@ -47,6 +47,8 @@ import java.util.List;
 import java.util.Queue;
 import java.util.jar.Manifest;
 
+import static com.example.elephantflysong.musicplayer.R.drawable.music;
+
 public class MainPlayActivity extends AppCompatActivity implements View.OnClickListener{
 
     private static final int REQUESTCODE_ACTION_GET_CONTENT = 1;
@@ -92,9 +94,15 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     position = 0;
                     return true;
                 case 2:
+                    Log.i("info","msg.what=2");
                     int currentTime = binder.getCurrentProgress();
                     seekBar.setProgress(currentTime);
                     text_currentTime.setText(toTime(currentTime));
+                    break;
+                case 3:
+                    text_currentTime.setText(toTime(files.get(position).getLength()));
+                    seekBar.setProgress(files.get(position).getLength());
+                    break;
                 default:
                     break;
             }
@@ -102,20 +110,21 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         }
     });
 
+
     private MyThread seekBarThread;
 
     public class MyThread extends Thread{
 
-        private boolean exec = true;
+        private volatile boolean exec = true;
 
         @Override
         public void run() {
-            while (exec){
-                Message msg = new Message();
-                msg.what = 2;
-                handler.sendMessage(msg);
+            while (exec && !isInterrupted()){
                 try{
                     Thread.sleep(1000);
+                    Message msg = new Message();
+                    msg.what = 2;
+                    handler.sendMessage(msg);
                 }catch (InterruptedException e){
                     e.printStackTrace();
                 }
@@ -137,35 +146,48 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             status = MUSIC_START;
         }
     };
+
     private MusicListener musicListener = new MusicListener() {
         @Override
-        public void onStart(Music music) {
+        public void onStart(Music music) throws InterruptedException {
+            bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
             text_currentMusic.setText(music.getName());
             text_endTime.setText(toTime(music.getLength()));
             seekBar.setMax(music.getLength());
+            if(seekBarThread!=null){
+                seekBarThread.interrupt();
+                seekBarThread.quit();
+                seekBarThread.join();
+                seekBarThread = null;
+            }
             seekBarThread = new MyThread();
             seekBarThread.start();
         }
 
         @Override
-        public void onPause() {
+        public void onPause() throws InterruptedException {
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
             if (seekBarThread != null){
+                seekBarThread.interrupt();
                 seekBarThread.quit();
+                seekBarThread.join();
                 seekBarThread = null;
             }
         }
 
         @Override
-        public void onStop() {
+        public void onStop() throws InterruptedException {
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
             if (seekBarThread != null){
+                seekBarThread.interrupt();
                 seekBarThread.quit();
+                seekBarThread.join();
                 seekBarThread = null;
             }
 
-            text_currentTime.setText(toTime(files.get(position).getLength()));
-            seekBar.setProgress(files.get(position).getLength());
+            Message msg = new Message();
+            msg.what = 3;
+            handler.sendMessage(msg);
         }
 
         @Override
@@ -274,9 +296,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         if (resultCode == Activity.RESULT_OK){
             switch (requestCode){
                 case REQUESTCODE_ACTION_GET_CONTENT:
-                    Uri uri = data.getData();
-                    String path = uri.getPath();
-                    Log.i("info", "onActivityResult() path=" + path);
+
                     break;
                 default:
                     break;
@@ -389,10 +409,9 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         if (binder != null){
             binder.setMusicListener(musicListener);//冗余操作
             if (status != MUSIC_START){
-                if (position == -1){
-                    position = 0;
+                if (status == MUSIC_STOP){
                     binder.startMusic(files.get(position));
-                }else{
+                }else if (status == MUSIC_PAUSE){
                     binder.continueMusic();
                 }
                 status = MUSIC_START;
