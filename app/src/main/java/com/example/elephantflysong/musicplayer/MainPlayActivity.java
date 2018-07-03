@@ -2,6 +2,8 @@ package com.example.elephantflysong.musicplayer;
 
 import android.app.Activity;
 import android.content.ComponentName;
+import android.content.ContentValues;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
@@ -45,13 +47,16 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.StringTokenizer;
 import java.util.jar.Manifest;
 
 import static com.example.elephantflysong.musicplayer.R.drawable.music;
 
 public class MainPlayActivity extends AppCompatActivity implements View.OnClickListener{
 
-    private static final int REQUESTCODE_ACTION_GET_CONTENT = 1;
+    private static final int REQUESTCODE_ADDMUSICLIST = 1;
+
+    private static final String TAG = "MUSICLIST";
 
     public static final int MUSIC_STOP = 0;
     public static final int MUSIC_START = 1;
@@ -90,11 +95,11 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     rv_musics.setItemAnimator(new DefaultItemAnimator());
                     adapter = new MusicAdapter(files);
                     adapter.setOnItemClickListener(onItemClickListener);
+                    adapter.setOnItemLongClickListern(onItemLongClickListener);
                     rv_musics.setAdapter(adapter);
                     position = 0;
                     return true;
                 case 2:
-                    Log.i("info","msg.what=2");
                     int currentTime = binder.getCurrentProgress();
                     seekBar.setProgress(currentTime);
                     text_currentTime.setText(toTime(currentTime));
@@ -103,13 +108,19 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     text_currentTime.setText(toTime(files.get(position).getLength()));
                     seekBar.setProgress(files.get(position).getLength());
                     break;
+                case 4:
+                    String table = dbHelper.getTableName(db, (String)msg.obj);
+                    Log.e("error", (String)msg.obj);
+                    Log.e("error", table);
+                    files = dbHelper.getMusics(db, table);
+                    adapter.resetData(files);
+                    break;
                 default:
                     break;
             }
             return false;
         }
     });
-
 
     private MyThread seekBarThread;
 
@@ -144,6 +155,62 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             binder.startMusic(files.get(position));
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
             status = MUSIC_START;
+        }
+    };
+
+    private MusicAdapter.OnItemLongClickListener onItemLongClickListener =
+            new MusicAdapter.OnItemLongClickListener() {
+        @Override
+        public void onItemLongClickListener(final int position) {
+            final Cursor cursor = db.rawQuery("select * from Table_musicList", null);
+            ArrayList<String> list = new ArrayList<>();
+            while (cursor.moveToNext()){
+                list.add(cursor.getString(cursor.getColumnIndex("listName")));
+            }
+            cursor.close();
+            final String[] items = list.toArray(new String[list.size()]);
+            final boolean[] select = new boolean[items.length];
+            for (int i=0; i<select.length; i++){
+                select[i] = false;
+            }
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(MainPlayActivity.this);
+            builder.setTitle("添加到歌单");
+            builder.setMultiChoiceItems(items, select,
+                    new DialogInterface.OnMultiChoiceClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which, boolean isChecked) {
+                    select[which] = isChecked;
+                }
+            });
+            builder.setPositiveButton("添加", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    if (which == 0){
+                        files = dbHelper.getMusics(db);
+                        Message msg = new Message();
+                        msg.what = 1;
+                        handler.sendMessage(msg);
+                        return;
+                    }
+
+                    for (int i=1; i<select.length; i++){
+                        if (select[i]){
+                            String table = dbHelper.getTableName(db, items[i]);
+                            Cursor cursor1 = db.rawQuery("select id from " + FileColumn.TABLE +
+                                " where " + FileColumn.PATH + "='" + files.get(position).getPath() +
+                                "'", null);
+                            if (cursor1.moveToNext()){
+                                int id = cursor1.getInt(cursor1.getColumnIndex("id"));
+                                db.execSQL("insert into " + table + " values(" + id + ")");
+                            }
+                            cursor1.close();
+                        }
+                    }
+                }
+            });
+            builder.setNegativeButton("取消", null);
+            builder.show();
         }
     };
 
@@ -254,6 +321,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         bindService(intent, connection, BIND_AUTO_CREATE);
 
         initMainView();
+
     }
 
     @Override
@@ -279,11 +347,9 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                 File file = Environment.getExternalStorageDirectory();
                 browserFile(file);
                 break;
-            case R.id.item_menu_mainactivity_selectDir:
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.setType("*/*");
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                startActivityForResult(intent, REQUESTCODE_ACTION_GET_CONTENT);
+            case R.id.item_menu_mainactivity_addMusicList:
+                Intent intent = new Intent(MainPlayActivity.this, AddMusicListActivity.class);
+                startActivityForResult(intent,REQUESTCODE_ADDMUSICLIST);
                 break;
             default:
                 break;
@@ -295,8 +361,9 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (resultCode == Activity.RESULT_OK){
             switch (requestCode){
-                case REQUESTCODE_ACTION_GET_CONTENT:
-
+                case REQUESTCODE_ADDMUSICLIST:
+                    String newlist = data.getStringExtra("new list");
+                    dbHelper.createNewList(db, newlist);
                     break;
                 default:
                     break;
@@ -381,12 +448,14 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             msg.what = 1;
             handler.sendMessage(msg);
         }
+        cursor.close();
     }
 
     @Override
     public void onClick(View v) {
         switch (v.getId()){
             case R.id.ibtn_listplay:
+                showMusicList();
                 break;
             case R.id.ibtn_start:
                 startMusic();
@@ -403,6 +472,39 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             default:
                 break;
         }
+    }
+
+    private void showMusicList(){
+        Cursor cursor = db.rawQuery("select * from Table_musicList", null);
+        ArrayList<String> list = new ArrayList<>();
+        while (cursor.moveToNext()){
+            list.add(cursor.getString(cursor.getColumnIndex("listName")));
+        }
+        cursor.close();
+        final String[] items = (String[])list.toArray(new String[list.size()]);
+        final int[] select = new int[1];
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("我的歌单");
+        builder.setCancelable(true);
+
+        builder.setSingleChoiceItems(items, -1, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                select[0] = which;
+            }
+        });
+        builder.setPositiveButton("显示歌单", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                Message msg = new Message();
+                msg.what = 4;
+                msg.obj = items[select[0]];
+                handler.sendMessage(msg);
+            }
+        });
+        builder.setNegativeButton("取消", null);
+        builder.show();
     }
 
     private void startMusic(){
@@ -465,8 +567,16 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             public void run() {
                 files = new ArrayList<>();
                 searchMP3(file);
-                //dbHelper.addAllToDataBase(db, files);
                 if (files.size() > 0){
+                    dbHelper.addAllToDataBase(db, files);
+                    Cursor cursor = db.rawQuery("select id from " + FileColumn.TABLE, null);
+                    while (cursor.moveToNext()){
+                        int id = cursor.getInt(0);
+                        String table = dbHelper.getTableName(db, "全部");
+                        db.execSQL("insert into " + table + " values(" + id + ")");
+                        Log.i("info", "Music " + id);
+                    }
+                    cursor.close();
                     adapter = new MusicAdapter(files);
                     Message msg = new Message();
                     msg.what = 1;
