@@ -2,15 +2,14 @@ package com.example.elephantflysong.musicplayer;
 
 import android.app.Activity;
 import android.content.ComponentName;
-import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.media.MediaMetadataRetriever;
-import android.net.Uri;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
@@ -36,6 +35,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.elephantflysong.musicplayer.Adapters.MusicAdapter;
+import com.example.elephantflysong.musicplayer.Broadcasts.MusicReceiver;
 import com.example.elephantflysong.musicplayer.DataBase.DBHelper;
 import com.example.elephantflysong.musicplayer.DataBase.FileColumn;
 import com.example.elephantflysong.musicplayer.Interfaces.MusicListener;
@@ -43,14 +43,8 @@ import com.example.elephantflysong.musicplayer.Music.Music;
 import com.example.elephantflysong.musicplayer.Services.MusicService;
 
 import java.io.File;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Queue;
-import java.util.StringTokenizer;
-import java.util.jar.Manifest;
-
-import static com.example.elephantflysong.musicplayer.R.drawable.music;
 
 public class MainPlayActivity extends AppCompatActivity implements View.OnClickListener{
 
@@ -58,9 +52,18 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
 
     private static final String TAG = "MUSICLIST";
 
+    private static final String BROADCAST_ACTION = "com.example.elephant.music";
+    public static final int BC_STOP = 0;
+    public static final int BC_PREVIOUS = 1;
+    public static final int BC_START = 2;
+    public static final int BC_PAUSE = 3;
+    public static final int BC_NEXT = 4;
+
     public static final int MUSIC_STOP = 0;
     public static final int MUSIC_START = 1;
     public static final int MUSIC_PAUSE = 2;
+
+    public static final String SERIALIZABLE_KEY = "music";
 
     private DBHelper dbHelper;
     private SQLiteDatabase db;
@@ -110,8 +113,6 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     break;
                 case 4:
                     String table = dbHelper.getTableName(db, (String)msg.obj);
-                    Log.e("error", (String)msg.obj);
-                    Log.e("error", table);
                     files = dbHelper.getMusics(db, table);
                     adapter.resetData(files);
                     break;
@@ -298,6 +299,8 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         }
     };
 
+    private MusicReceiver receiver;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -319,6 +322,11 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
 
         Intent intent = new Intent(MainPlayActivity.this, MusicService.class);
         bindService(intent, connection, BIND_AUTO_CREATE);
+
+        receiver = new MusicReceiver(musicListener);
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(BROADCAST_ACTION);
+        registerReceiver(receiver, filter);
 
         initMainView();
 
@@ -517,11 +525,14 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     binder.continueMusic();
                 }
                 status = MUSIC_START;
+                sendBroadcast(BC_START);
             }else{
                 binder.pauseMusic();
                 bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
                 status = MUSIC_PAUSE;
+                sendBroadcast(BC_PAUSE);
             }
+
         }
     }
 
@@ -529,6 +540,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         if (binder != null){
             binder.stopMusic();
             status = MUSIC_STOP;
+            sendBroadcast(BC_STOP);
         }
     }
 
@@ -540,6 +552,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             binder.startMusic(files.get(position));
             musicListener.onPrevious(files.get(position));
             status = MUSIC_START;
+            sendBroadcast(BC_PREVIOUS);
         }
     }
 
@@ -550,6 +563,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             binder.startMusic(files.get(position));
             musicListener.onNext(files.get(position));
             status = MUSIC_START;
+            sendBroadcast(BC_NEXT);
         }
     }
 
@@ -630,6 +644,21 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             return "" + minutes + ":0" + seconds;
         }
         return "" + minutes + ":" + seconds;
+    }
+
+    private void sendNotification(Music music){
+
+    }
+
+    private void sendBroadcast(int id){
+        Bundle bundle = new Bundle();
+        bundle.putSerializable(SERIALIZABLE_KEY, files.get(position));
+        Intent intent = new Intent();
+        intent.setAction(BROADCAST_ACTION);
+        intent.putExtra("code", id);
+        intent.putExtras(bundle);
+        sendBroadcast(intent);
+        Log.i("info", "sended");
     }
 
 }

@@ -25,7 +25,8 @@
             android:enabled="true"
             android:exported="true" />
 
-        <activity android:name=".AddMusicListActivity"></activity>
+        <activity android:name=".AddMusicListActivity" />
+
     </application>
 
 </manifest>

@@ -1,10 +1,15 @@
 package com.example.elephantflysong.musicplayer.Music;
 
+import java.io.Serializable;
+
 /**
  * Created by ElephantFlySong on 2018/6/13.
  */
 
-public class Music {
+public class Music implements Serializable{
+
+    private static final long serialVersionUID = -7620435178023928252L;
+
     private int id;
     private String name;
     private String path;
