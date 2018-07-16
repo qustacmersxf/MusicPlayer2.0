@@ -64,6 +64,9 @@ public class Music implements Serializable{
     }
 
     public void setArtist(String artist) {
+        if (artist.isEmpty()){
+            this.artist = "未知";
+        }
         this.artist = artist;
     }
 }

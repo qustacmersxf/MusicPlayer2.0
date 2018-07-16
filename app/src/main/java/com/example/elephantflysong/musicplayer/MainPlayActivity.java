@@ -1,20 +1,33 @@
 package com.example.elephantflysong.musicplayer;
 
+import android.Manifest;
+import android.annotation.TargetApi;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.SyncAdapterType;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Color;
 import android.media.MediaMetadataRetriever;
+import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
+import android.os.SystemClock;
+import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
@@ -30,6 +43,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageButton;
+import android.widget.RemoteViews;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -38,6 +52,7 @@ import com.example.elephantflysong.musicplayer.Adapters.MusicAdapter;
 import com.example.elephantflysong.musicplayer.Broadcasts.MusicReceiver;
 import com.example.elephantflysong.musicplayer.DataBase.DBHelper;
 import com.example.elephantflysong.musicplayer.DataBase.FileColumn;
+import com.example.elephantflysong.musicplayer.Interfaces.MusicControler;
 import com.example.elephantflysong.musicplayer.Interfaces.MusicListener;
 import com.example.elephantflysong.musicplayer.Music.Music;
 import com.example.elephantflysong.musicplayer.Services.MusicService;
@@ -115,6 +130,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                     String table = dbHelper.getTableName(db, (String)msg.obj);
                     files = dbHelper.getMusics(db, table);
                     adapter.resetData(files);
+                    position = 0;
                     break;
                 default:
                     break;
@@ -133,7 +149,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         public void run() {
             while (exec && !isInterrupted()){
                 try{
-                    Thread.sleep(1000);
+                    Thread.sleep(500);
                     Message msg = new Message();
                     msg.what = 2;
                     handler.sendMessage(msg);
@@ -156,6 +172,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             binder.startMusic(files.get(position));
             bt_play.setImageDrawable(getResources().getDrawable(R.drawable.pause));
             status = MUSIC_START;
+            sendNotification(files.get(position), status);
         }
     };
 
@@ -287,6 +304,33 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         }
     };
 
+    private MusicControler musicControler = new MusicControler() {
+        @Override
+        public void pauseMusic_() {
+            startMusic();
+        }
+
+        @Override
+        public void continueMusic_() {
+            startMusic();
+        }
+
+        @Override
+        public void stopMusic_() {
+            stopMusic();
+        }
+
+        @Override
+        public void nextMusic_() {
+            nextMusic();
+        }
+
+        @Override
+        public void previousMusic_() {
+            previousMusic();
+        }
+    };
+
     private ServiceConnection connection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
@@ -315,15 +359,18 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                 android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
             permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE);
         }
+        if (ContextCompat.checkSelfPermission(MainPlayActivity.this,
+                Manifest.permission.VIBRATE) != PackageManager.PERMISSION_GRANTED){
+            permissions.add(Manifest.permission.VIBRATE);
+        }
         if (!permissions.isEmpty()){
             String[] _perssions = permissions.toArray(new String[permissions.size()]);
             ActivityCompat.requestPermissions(MainPlayActivity.this, _perssions, 1);
         }
-
         Intent intent = new Intent(MainPlayActivity.this, MusicService.class);
         bindService(intent, connection, BIND_AUTO_CREATE);
 
-        receiver = new MusicReceiver(musicListener);
+        receiver = new MusicReceiver(musicListener, musicControler);
         IntentFilter filter = new IntentFilter();
         filter.addAction(BROADCAST_ACTION);
         registerReceiver(receiver, filter);
@@ -489,7 +536,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             list.add(cursor.getString(cursor.getColumnIndex("listName")));
         }
         cursor.close();
-        final String[] items = (String[])list.toArray(new String[list.size()]);
+        final String[] items = list.toArray(new String[list.size()]);
         final int[] select = new int[1];
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -520,19 +567,21 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             binder.setMusicListener(musicListener);//冗余操作
             if (status != MUSIC_START){
                 if (status == MUSIC_STOP){
+                    if (position == -1){
+                        position = 0;
+                    }
                     binder.startMusic(files.get(position));
                 }else if (status == MUSIC_PAUSE){
                     binder.continueMusic();
                 }
                 status = MUSIC_START;
-                sendBroadcast(BC_START);
+                sendNotification(files.get(position), MUSIC_START);
             }else{
                 binder.pauseMusic();
                 bt_play.setImageDrawable(getResources().getDrawable(R.drawable.start));
                 status = MUSIC_PAUSE;
-                sendBroadcast(BC_PAUSE);
+                sendNotification(files.get(position), MUSIC_PAUSE);
             }
-
         }
     }
 
@@ -540,19 +589,18 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         if (binder != null){
             binder.stopMusic();
             status = MUSIC_STOP;
-            sendBroadcast(BC_STOP);
+            sendNotification(files.get(position), MUSIC_STOP);
         }
     }
 
     private void previousMusic(){
         if (binder != null){
-            //position = binder.previousMusic();
             position = (position + files.size() - 1) % files.size();
             binder.stopMusic();
             binder.startMusic(files.get(position));
             musicListener.onPrevious(files.get(position));
             status = MUSIC_START;
-            sendBroadcast(BC_PREVIOUS);
+            sendNotification(files.get(position), MUSIC_START);
         }
     }
 
@@ -563,7 +611,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
             binder.startMusic(files.get(position));
             musicListener.onNext(files.get(position));
             status = MUSIC_START;
-            sendBroadcast(BC_NEXT);
+            sendNotification(files.get(position), MUSIC_START);
         }
     }
 
@@ -583,6 +631,7 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                 searchMP3(file);
                 if (files.size() > 0){
                     dbHelper.addAllToDataBase(db, files);
+                    dbHelper.resetData(db, files);
                     Cursor cursor = db.rawQuery("select id from " + FileColumn.TABLE, null);
                     while (cursor.moveToNext()){
                         int id = cursor.getInt(0);
@@ -646,19 +695,71 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         return "" + minutes + ":" + seconds;
     }
 
-    private void sendNotification(Music music){
+    private void sendNotification(Music music, int status){
 
-    }
-
-    private void sendBroadcast(int id){
         Bundle bundle = new Bundle();
         bundle.putSerializable(SERIALIZABLE_KEY, files.get(position));
-        Intent intent = new Intent();
-        intent.setAction(BROADCAST_ACTION);
-        intent.putExtra("code", id);
-        intent.putExtras(bundle);
-        sendBroadcast(intent);
-        Log.i("info", "sended");
-    }
 
+        NotificationManager notificationManager =
+                (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationChannel channel =
+                new NotificationChannel("1", "Channel1",  NotificationManager.IMPORTANCE_MIN
+                );
+        channel.enableVibration(false);
+        channel.setVibrationPattern(new long[]{0});
+        notificationManager.createNotificationChannel(channel);
+
+        Notification.Builder builder = new Notification.Builder(this, "1");
+        builder.setSmallIcon(R.drawable.music);
+        builder.setAutoCancel(false);
+        Notification notification = builder.build();
+
+        RemoteViews remoteViews = new RemoteViews(getPackageName(),
+                R.layout.notification);
+        remoteViews.setImageViewResource(R.id.notification_imgv, R.drawable.music);
+        remoteViews.setTextViewText(R.id.notification_text_name,music.getName());
+        remoteViews.setTextViewText(R.id.notification_text_artist,music.getArtist());
+
+        int requestCode = (int) SystemClock.uptimeMillis();
+        Intent intent_stop = new Intent(BROADCAST_ACTION);
+        intent_stop.putExtra("code", BC_STOP);
+        intent_stop.putExtras(bundle);
+        PendingIntent pendingIntent_stop = PendingIntent.getBroadcast(this, requestCode,
+                intent_stop, PendingIntent.FLAG_UPDATE_CURRENT);
+        remoteViews.setOnClickPendingIntent(R.id.notification_stop, pendingIntent_stop);
+
+        requestCode = (int) SystemClock.uptimeMillis();
+        Intent intent_previous = new Intent(BROADCAST_ACTION);
+        intent_previous.putExtra("code", BC_PREVIOUS);
+        intent_previous.putExtras(bundle);
+        PendingIntent pendingIntent_previous = PendingIntent.getBroadcast(this, requestCode,
+                intent_previous, PendingIntent.FLAG_UPDATE_CURRENT);
+        remoteViews.setOnClickPendingIntent(R.id.notification_previous, pendingIntent_previous);
+
+        requestCode = (int) SystemClock.uptimeMillis();
+        Intent intent_start = new Intent(BROADCAST_ACTION);
+        if (status == MUSIC_PAUSE || status == MUSIC_STOP){
+            intent_start.putExtra("code", BC_START);
+            remoteViews.setImageViewResource(R.id.notification_start, R.drawable.start);
+        }else{
+            intent_start.putExtra("code", BC_PAUSE);
+            remoteViews.setImageViewResource(R.id.notification_start, R.drawable.pause);
+        }
+        intent_start.putExtras(bundle);
+        PendingIntent pendingIntent_start = PendingIntent.getBroadcast(this, requestCode, intent_start,
+                PendingIntent.FLAG_UPDATE_CURRENT);
+        remoteViews.setOnClickPendingIntent(R.id.notification_start, pendingIntent_start);
+
+        requestCode = (int) SystemClock.uptimeMillis();
+        Intent intent_next = new Intent(BROADCAST_ACTION);
+        intent_next.putExtra("code", BC_NEXT);
+        intent_next.putExtras(bundle);
+        PendingIntent pendingIntent_next = PendingIntent.getBroadcast(this, requestCode,
+                intent_next, PendingIntent.FLAG_UPDATE_CURRENT);
+        remoteViews.setOnClickPendingIntent(R.id.notification_next, pendingIntent_next);
+
+        notification.bigContentView = remoteViews;
+        notification.flags |= NotificationCompat.FLAG_NO_CLEAR;
+        notificationManager.notify(1, notification);
+    }
 }

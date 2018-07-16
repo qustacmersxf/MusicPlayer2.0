@@ -19,7 +19,7 @@ import java.util.StringTokenizer;
 
 public class DBHelper extends SQLiteOpenHelper {
 
-    private static final int DATABASE_VERSION = 7;
+    private static final int DATABASE_VERSION = 8;
 
     public static final String DATABASE_NAME = "db_musics";
     public static final String TABLES_TABLE_NAME = "File_Table";
@@ -80,17 +80,6 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public ArrayList<Music> getMusics(SQLiteDatabase db){
-        //ArrayList<Music> result = new ArrayList<>();
-        //Cursor cursor = db.rawQuery("select * from " + FileColumn.TABLE, null /*new String[]{FileColumn.TABLE}*/);
-        /*while (cursor.moveToNext()){
-            int id = cursor.getInt(cursor.getColumnIndex(FileColumn.ID));
-            String name = cursor.getString(cursor.getColumnIndex(FileColumn.NAME));
-            String path = cursor.getString(cursor.getColumnIndex(FileColumn.PATH));
-            int length = cursor.getInt(cursor.getColumnIndex(FileColumn.LENGTH));
-            String artist = cursor.getString(cursor.getColumnIndex(FileColumn.ARTIST));
-            result.add(new Music(id, name, path, length, artist));
-        }
-        return result;*/
         return getMusics(db, FileColumn.TABLE);
     }
 
@@ -112,7 +101,8 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void resetData(SQLiteDatabase db, ArrayList<Music> data){
-        db.execSQL("delete * from " + FileColumn.TABLE, null);
+        db.execSQL("DELETE FROM sqlite_sequence WHERE name = '" + FileColumn.TABLE + "'");
+
         addAllToDataBase(db, data);
     }
 
