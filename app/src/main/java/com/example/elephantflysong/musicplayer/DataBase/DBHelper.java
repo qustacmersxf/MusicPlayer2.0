@@ -19,16 +19,16 @@ import java.util.StringTokenizer;
 
 public class DBHelper extends SQLiteOpenHelper {
 
-    private static final int DATABASE_VERSION = 8;
+    private static final int DATABASE_VERSION = 10;
 
     public static final String DATABASE_NAME = "db_musics";
-    public static final String TABLES_TABLE_NAME = "File_Table";
     public static final String DATABASE_CREATE = "CREATE TABLE " + FileColumn.TABLE + "(" +
             FileColumn.ID + " integer primary key autoincrement," +
             FileColumn.NAME + " text," +
             FileColumn.PATH + " text," +
             FileColumn.LENGTH + " integer," +
-            FileColumn.ARTIST + " text)";
+            FileColumn.ARTIST + " text)";/* +
+            FileColumn.ARTWORK + " blob)";*/
     public static final String DATABASE_CREATE_MUSICLISTS = "CREATE TABLE Table_musicList (" +
             "listName text," +
             "tableName text)";
@@ -74,6 +74,7 @@ public class DBHelper extends SQLiteOpenHelper {
             values.put(FileColumn.PATH, music.getPath());
             values.put(FileColumn.LENGTH, music.getLength());
             values.put(FileColumn.ARTIST, music.getArtist());
+            //values.put(FileColumn.ARTWORK, music.getArtwork());
             db.insert(FileColumn.TABLE, null, values);
         }
         cursor.close();
@@ -94,7 +95,8 @@ public class DBHelper extends SQLiteOpenHelper {
             String path = cursor.getString(cursor.getColumnIndex(FileColumn.PATH));
             int length = cursor.getInt(cursor.getColumnIndex(FileColumn.LENGTH));
             String artist = cursor.getString(cursor.getColumnIndex(FileColumn.ARTIST));
-            result.add(new Music(id, name, path, length, artist));
+            //byte[] artwork = cursor.getBlob(cursor.getColumnIndex(FileColumn.ARTWORK));
+            result.add(new Music(id, name, path, length, artist/*, artwork*/));
         }
         cursor.close();
         return result;
@@ -102,7 +104,6 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public void resetData(SQLiteDatabase db, ArrayList<Music> data){
         db.execSQL("DELETE FROM sqlite_sequence WHERE name = '" + FileColumn.TABLE + "'");
-
         addAllToDataBase(db, data);
     }
 

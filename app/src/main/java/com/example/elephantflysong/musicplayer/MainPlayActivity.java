@@ -17,6 +17,8 @@ import android.content.SyncAdapterType;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.media.MediaMetadataRetriever;
 import android.os.Build;
@@ -376,7 +378,6 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
         registerReceiver(receiver, filter);
 
         initMainView();
-
     }
 
     @Override
@@ -630,14 +631,12 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                 files = new ArrayList<>();
                 searchMP3(file);
                 if (files.size() > 0){
-                    dbHelper.addAllToDataBase(db, files);
                     dbHelper.resetData(db, files);
                     Cursor cursor = db.rawQuery("select id from " + FileColumn.TABLE, null);
                     while (cursor.moveToNext()){
                         int id = cursor.getInt(0);
                         String table = dbHelper.getTableName(db, "全部");
                         db.execSQL("insert into " + table + " values(" + id + ")");
-                        Log.i("info", "Music " + id);
                     }
                     cursor.close();
                     adapter = new MusicAdapter(files);
@@ -672,6 +671,11 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
                                     .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST));
                             music.setLength(Integer.valueOf(retriever
                                 .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)));
+                            /*byte[] bytes = retriever.getEmbeddedPicture();
+                            if (bytes == null){
+                                Log.e("error", "bytes is null");
+                            }
+                            music.setArtwork(bytes);*/
                             files.add(music);
                         }catch (Exception e){
                             e.printStackTrace();
@@ -716,7 +720,11 @@ public class MainPlayActivity extends AppCompatActivity implements View.OnClickL
 
         RemoteViews remoteViews = new RemoteViews(getPackageName(),
                 R.layout.notification);
-        remoteViews.setImageViewResource(R.id.notification_imgv, R.drawable.music);
+        if (music.getArtwork() != null){
+            remoteViews.setImageViewBitmap(R.id.notification_imgv, music.getArtworkBitmap());
+        }else {
+            remoteViews.setImageViewResource(R.id.notification_imgv, R.drawable.music);
+        }
         remoteViews.setTextViewText(R.id.notification_text_name,music.getName());
         remoteViews.setTextViewText(R.id.notification_text_artist,music.getArtist());
 

@@ -11,4 +11,5 @@ public class FileColumn {
     public static String PATH = "path";
     public static String LENGTH = "length";
     public static String ARTIST = "artist";
+    public static String ARTWORK = "artwork";
 }

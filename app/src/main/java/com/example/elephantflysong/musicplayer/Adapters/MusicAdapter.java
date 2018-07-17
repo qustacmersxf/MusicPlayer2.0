@@ -1,5 +1,7 @@
 package com.example.elephantflysong.musicplayer.Adapters;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -11,7 +13,6 @@ import android.widget.TextView;
 import com.example.elephantflysong.musicplayer.Music.Music;
 import com.example.elephantflysong.musicplayer.R;
 
-import java.io.File;
 import java.util.ArrayList;
 
 /**
@@ -83,7 +84,11 @@ public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.ViewHolder> 
         }
 
         public void setMusic(Music music){
-            image_cover.setBackgroundResource(R.drawable.music);
+            if (music.getArtwork() != null){
+                image_cover.setImageBitmap(music.getArtworkBitmap());
+            }else{
+                image_cover.setBackgroundResource(R.drawable.music);
+            }
             text_name.setText(music.getName());
             text_artist.setText(music.getArtist());
         }

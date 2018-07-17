@@ -1,5 +1,8 @@
 package com.example.elephantflysong.musicplayer.Music;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+
 import java.io.Serializable;
 
 /**
@@ -15,16 +18,18 @@ public class Music implements Serializable{
     private String path;
     private int length;
     private String artist;
+    private byte[] artwork;
 
     public Music() {
     }
 
-    public Music(int id, String name, String path, int length, String artist) {
+    public Music(int id, String name, String path, int length, String artist/*, byte[] artwork*/) {
         this.id = id;
         this.name = name;
         this.path = path;
         this.length = length;
         this.artist = artist;
+        this.artwork = null;
     }
 
     public int getId() {
@@ -68,5 +73,18 @@ public class Music implements Serializable{
             this.artist = "未知";
         }
         this.artist = artist;
+    }
+
+    public Bitmap getArtworkBitmap(){
+        Bitmap bitmap = BitmapFactory.decodeByteArray(artwork, 0, artwork.length);
+        return bitmap;
+    }
+
+    public byte[] getArtwork() {
+        return artwork;
+    }
+
+    public void setArtwork(byte[] artwork) {
+        this.artwork = artwork;
     }
 }
